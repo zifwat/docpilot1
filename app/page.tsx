@@ -24,7 +24,6 @@ const Main: React.FC = () => {
   const [extractedData, setExtractedData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(false); // New loading state
 
-
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
@@ -32,6 +31,44 @@ const Main: React.FC = () => {
       await processPDF(file);
       setIsFileUploaded(true);
     }
+  };
+  
+  const groupSameValues = (values: any[]) => {
+    const groupedValues: Record<string, string[]> = {};
+  
+    values.flat().forEach((value) => {
+      if (typeof value === 'string') {
+        const [firstPart, secondPart] = value.split("_");
+  
+        if (!groupedValues[firstPart]) {
+          groupedValues[firstPart] = [];
+        }
+  
+        groupedValues[firstPart].push(secondPart);
+      }
+    });
+  
+    return groupedValues;
+  };
+
+  const groupDataByKey = (data: Record<string, string | string[]>) => {
+    const groupedData: Record<string, string[]> = {};
+  
+    Object.entries(data).forEach(([key, value]) => {
+      const [firstPart, secondPart] = key.split("_");
+  
+      if (!groupedData[firstPart]) {
+        groupedData[firstPart] = [];
+      }
+  
+      if (Array.isArray(value)) {
+        groupedData[firstPart].push(...value);
+      } else {
+        groupedData[firstPart].push(value);
+      }
+    });
+  
+    return groupedData;
   };
 
   const processPDF = async (file: File) => {
@@ -77,7 +114,7 @@ const Main: React.FC = () => {
 
   const handleExtract = async () => {
     if (selectedFile) {
-      setLoading(true); 
+      setLoading(true);
       try {
         const formData = new FormData();
         formData.append("input", selectedFile);
@@ -90,7 +127,7 @@ const Main: React.FC = () => {
 
         if (response.ok) {
           const data = await response.json();
-          console.log(data);
+          console.log("data :", data);
 
           const filteredData = Object.fromEntries(
             Object.entries(data).filter(([key]) => key.endsWith("_value"))
@@ -98,14 +135,13 @@ const Main: React.FC = () => {
 
           setExtractedData(filteredData);
           console.log("Filtered Extracted Data:", filteredData);
-          console.log("Extracted Data:", setExtractedData);
         } else {
           console.error("Failed to upload file:", response.statusText);
         }
       } catch (error) {
         console.error("Error extracting data:", error);
       } finally {
-        setLoading(false); // Stop loading
+        setLoading(false);
       }
     }
   };
@@ -124,6 +160,15 @@ const Main: React.FC = () => {
         </Worker>
       </div>
     );
+  };
+
+  const flattenAndJoinArray = (value: any[]): string => {
+    const MAX_DISPLAY_ITEMS = 4;
+    const flattened = value.flat(Infinity); 
+    const displayItems = flattened.slice(0, MAX_DISPLAY_ITEMS); 
+    const additionalCount = flattened.length - MAX_DISPLAY_ITEMS;
+
+    return displayItems.join(", ") + (additionalCount > 0 ? `, and ${additionalCount} more` : "");
   };
 
   return (
@@ -170,31 +215,49 @@ const Main: React.FC = () => {
             </div>
           </div>
         )}
-
-
       </div>
 
-{/* Right Column: 75% */}
-<div className="flex flex-col items-center bg-gray-900 p-4 border-l border-gray-600 overflow-auto" style={{ width: "60%" }}>
+      {/* Right Column: 75% */}
+   <div className="flex flex-col items-center bg-gray-900 p-4 border-l border-gray-600 overflow-auto" style={{ width: "60%" }}>
   <div className="w-full h-[73vh]">
-  {loading ? ( // Show loading spinner when loading
-            <div className="flex justify-center items-center h-full">
-              <TailSpin height="50" width="50" color="#00BFFF" ariaLabel="loading" />
-            </div>
-          ) : Object.keys(extractedData).length === 0 ? (
-            <p className=" flex justify-center items-center p-4 border border-gray-600 h-full">No file uploaded.</p>
-          ) : (
-            <div className="p-4 border border-gray-600 rounded bg-gray-900 h-full overflow-y-scroll">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-x-4">
-                {Object.entries(extractedData).map(([key, value]) => (
-                  <div key={key} className="break-words mb-4 p-4 bg-gray-800 rounded shadow-md">
-                    <h3 className="font-bold mb-2 text-lg underline underline-offset-4">{key}</h3>
-                    <p className="text-justify overflow-hidden text-ellipsis">{value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+    {loading ? (
+      <div className="flex justify-center items-center h-full">
+        <TailSpin height="50" width="50" color="#00BFFF" ariaLabel="loading" />
+      </div>
+    ) : Object.keys(extractedData).length == 0 ? (
+      <p className="flex justify-center items-center p-4 border border-gray-600 h-full">No file uploaded.</p>
+    ) : (
+    <div className="p-4 border border-gray-600 rounded bg-gray-900 h-full overflow-y-scroll">
+  <div className="space-y-6">
+  {Object.entries(groupDataByKey(extractedData)).map(([key, values]) => (
+  <div key={key} className="flex items-center p-2 border border-gray-600 rounded bg-gray-800">
+    {/* Variable */}
+    <div className="flex-shrink-0 w-1/3">
+      <h3 className="font-bold text-lg whitespace-normal break-words overflow-hidden">
+        {key}
+      </h3>
+    </div>
+    {/* Combined Values */}
+    <div className="flex-1 ml-4">
+      {values.length > 1 ? (
+        <table className="w-full">
+          <tbody>
+            {Object.entries(groupSameValues(values)).map(([valueKey, value]) => (
+              <tr key={valueKey}>
+                <td className="border border-gray-600 p-2">{valueKey} {value.join(" ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p>{flattenAndJoinArray(values)}</p>
+      )}
+    </div>
+  </div>
+))}
+  </div>
+</div>
+    )}
   </div>
 
   {/* Buttons */}
@@ -209,7 +272,7 @@ const Main: React.FC = () => {
         <Menu.Item>
           {({ active }) => (
             <button
-              onClick={() => handleFileTypeChange("Card")}
+              onClick={() => handleFileTypeChange("Business Card")}
               className={`block px-4 py-2 text-white w-full text-left ${active ? "bg-cyan-700" : ""} cursor-pointer`}
             >
               Business Card
@@ -247,7 +310,8 @@ const Main: React.FC = () => {
     </CButton>
   </div>
 </div>
-</div>
+      
+    </div>
   );
 };
 
